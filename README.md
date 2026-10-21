@@ -11,6 +11,8 @@
 
 A playground for the [Croma API](https://docs.croma.run/guides/colombia/dian-facturacion): connect a DIAN electronic-invoicing account and explore its invoices, each document's original XML and PDF, the monthly invoicing report and the account's profile. Every call shows up in a live inspector you can copy from.
 
+**[Open the live playground →](https://dian-playground.vercel.app)**
+
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?project-name=dian-playground&repository-name=dian-playground&repository-url=https%3A%2F%2Fgithub.com%2Fcroma-labs%2Fdian-facturacion-example&env=CROMA_API_KEY&envDescription=CROMA_API_KEY+reads+DIAN+through+Croma+%28free+to+get%29.+The+sample-data+mode+works+without+it.&envLink=https%3A%2F%2Fplatform.usecroma.com%2Fsign-up)
 &nbsp;
 [![Get your Croma API key](public/croma-api-key-badge.svg)](https://platform.usecroma.com/sign-up)
@@ -26,7 +28,8 @@ A playground for the [Croma API](https://docs.croma.run/guides/colombia/dian-fac
 - **A dashboard built from two calls.** Sales, purchases, VAT generated and deductible, month by month, and the top clients and providers, all from `issued-documents` and `received-documents`.
 - **Every document, in full.** Search and filter the invoices, open one to see its lines, taxes, DIAN validations and RADIAN events, preview the PDF, read the UBL XML, download both.
 - **A live API inspector.** Each request, its response, its latency, and a ready-to-run cURL. The API key stays on your server; the browser never sees it.
-- **Nothing stored.** No database. The only state is a cookie that remembers which connection the browser is looking at.
+- **Nothing stored.** No database. The only state is a signed cookie that remembers which connection the browser is looking at.
+- **Safe to deploy in public.** With Upstash env vars set, access requests are limited to 3 per hour per IP (each one sends a DIAN email) and live queries to 40 per 10 minutes. The sample data is never limited.
 - **Validated end to end.** Zod schemas check every form before it leaves the browser, every server action before it calls the API, and every API response before it reaches the UI.
 - **Crafted UI.** [shadcn/ui](https://ui.shadcn.com) on the same ruled-sheet design system as the [Croma Chat Template](https://github.com/croma-labs/croma-chat-template): hairline rails, mono eyebrow labels, square surfaces, Croma blue, dark mode.
 
