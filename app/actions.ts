@@ -19,12 +19,15 @@ import {
   type AccessRequestForm,
   type RangeInput,
 } from "@/lib/schemas";
+import { limit } from "@/lib/ratelimit";
 import { clearSession, getSession, setSession } from "@/lib/session";
 import type { Result } from "@/lib/trace";
 
 const invalid = (error: z.ZodError) => ({ ok: false as const, error: { code: "invalid", message: error.issues[0]?.message ?? "Revisa los datos." }, trace: null });
 
 const noSession = { ok: false as const, error: { code: "no_session", message: "Conecta una cuenta para consultar." }, trace: null };
+
+const limited = (error: { code: string; message: string }) => ({ ok: false as const, error, trace: null });
 
 // ─── Onboarding ─────────────────────────────────────────────────────────────
 
@@ -36,12 +39,16 @@ export async function requestAccess(input: AccessRequestForm) {
     document_number: form.data.document_number,
     company_nit: form.data.kind === "empresa" ? form.data.company_nit : "",
   };
+  const blocked = await limit("access");
+  if (blocked) return limited(blocked);
   return croma("/co/dian-facturacion/access-requests/v1", body, accessRequest);
 }
 
 export async function connect(input: { access_link: string; authorized: boolean }) {
   const form = connectForm.safeParse(input);
   if (!form.success) return invalid(form.error);
+  const blocked = await limit("live");
+  if (blocked) return limited(blocked);
   // Registering the same account again renews it: the connection keeps its id.
   const result = await croma("/co/dian-facturacion/connections/v1", form.data, connection);
   if (result.ok) await setSession({ mode: "live", connectionId: result.data.id, openedAt: Date.now() });
@@ -72,6 +79,8 @@ export async function listDocuments(direction: "issued" | "received", input: Ran
   if (!session) return noSession;
   const path = `/co/dian-facturacion/${direction}-documents/v1`;
   if (session.mode === "demo") return demo(path, { connection_id: "conn_demo", ...range.data }, demoList(direction, range.data.from_date, range.data.to_date));
+  const blocked = await limit("live");
+  if (blocked) return limited(blocked);
   return croma(path, { connection_id: session.connectionId, ...range.data }, documentList);
 }
 
@@ -82,6 +91,8 @@ export async function getDocument(input: { cufe: string; issued_on: string }): P
   if (!session) return noSession;
   const path = "/co/dian-facturacion/document/v1";
   if (session.mode === "demo") return demo(path, { connection_id: "conn_demo", ...ref.data }, demoDocument(ref.data.cufe, ref.data.issued_on));
+  const blocked = await limit("live");
+  if (blocked) return limited(blocked);
   return croma(path, { connection_id: session.connectionId, ...ref.data }, fullDocument);
 }
 
@@ -92,6 +103,8 @@ export async function getMonthlyReport(input: { year: number; month: number }): 
   if (!session) return noSession;
   const path = "/co/dian-facturacion/monthly-reports/v1";
   if (session.mode === "demo") return demo(path, { connection_id: "conn_demo", ...month.data }, demoMonthlyReport(month.data.year, month.data.month));
+  const blocked = await limit("live");
+  if (blocked) return limited(blocked);
   return croma(path, { connection_id: session.connectionId, ...month.data }, monthlyReport);
 }
 
@@ -100,5 +113,7 @@ export async function getProfile(): Promise<Result<z.infer<typeof profile>>> {
   if (!session) return noSession;
   const path = "/co/dian-facturacion/profile/v1";
   if (session.mode === "demo") return demo(path, { connection_id: "conn_demo" }, demoProfile());
+  const blocked = await limit("live");
+  if (blocked) return limited(blocked);
   return croma(path, { connection_id: session.connectionId }, profile);
 }
