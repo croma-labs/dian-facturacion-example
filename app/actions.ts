@@ -1,82 +1,104 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { z } from "zod";
 
-import { croma, CromaError } from "@/lib/croma";
-import { clearConnectionId, getConnectionId, setConnectionId } from "@/lib/session";
-import type { AccessRequest, Connection, DocumentType } from "@/lib/types";
+import { croma } from "@/lib/croma";
+import { demo, demoDocument, demoList, demoMonthlyReport, demoProfile } from "@/lib/demo";
+import {
+  accessRequest,
+  accessRequestForm,
+  connection,
+  connectForm,
+  documentList,
+  documentRef,
+  fullDocument,
+  monthInput,
+  monthlyReport,
+  profile,
+  rangeInput,
+  type AccessRequestForm,
+  type RangeInput,
+} from "@/lib/schemas";
+import { clearSession, getSession, setSession } from "@/lib/session";
+import type { Result } from "@/lib/trace";
 
-export type RequestAccessState =
-  | { status: "idle" }
-  | { status: "sent"; result: AccessRequest }
-  | { status: "error"; message: string };
+const invalid = (error: z.ZodError) => ({ ok: false as const, error: { code: "invalid", message: error.issues[0]?.message ?? "Revisa los datos." }, trace: null });
 
-export async function requestAccess(_: RequestAccessState, form: FormData): Promise<RequestAccessState> {
-  const kind = form.get("kind") === "persona" ? "persona" : "empresa";
-  const documentNumber = String(form.get("document_number") ?? "").replace(/\D/g, "");
-  const companyNit = kind === "empresa" ? String(form.get("company_nit") ?? "").replace(/\D/g, "") : "";
-  if (!documentNumber) return { status: "error", message: "Escribe el número de documento." };
-  if (kind === "empresa" && !companyNit) return { status: "error", message: "Escribe el NIT de la empresa, sin dígito de verificación." };
+const noSession = { ok: false as const, error: { code: "no_session", message: "Conecta una cuenta para consultar." }, trace: null };
 
-  try {
-    const result = await croma<AccessRequest>("/co/dian-facturacion/access-requests/v1", {
-      document_type: (form.get("document_type") as DocumentType | null) ?? "CC",
-      document_number: documentNumber,
-      company_nit: companyNit,
-    });
-    if (!result.sent) return { status: "error", message: result.message ?? "La DIAN no envió el enlace. Revisa los datos e intenta de nuevo." };
-    return { status: "sent", result };
-  } catch (error) {
-    return { status: "error", message: describe(error) };
-  }
+// ─── Onboarding ─────────────────────────────────────────────────────────────
+
+export async function requestAccess(input: AccessRequestForm) {
+  const form = accessRequestForm.safeParse(input);
+  if (!form.success) return invalid(form.error);
+  const body = {
+    document_type: form.data.document_type,
+    document_number: form.data.document_number,
+    company_nit: form.data.kind === "empresa" ? form.data.company_nit : "",
+  };
+  return croma("/co/dian-facturacion/access-requests/v1", body, accessRequest);
 }
 
-export type ConnectState = { status: "idle" } | { status: "error"; message: string };
-
-export async function connect(_: ConnectState, form: FormData): Promise<ConnectState> {
-  const accessLink = String(form.get("access_link") ?? "").trim();
-  if (!accessLink.startsWith("https://")) return { status: "error", message: "Pega el enlace completo del correo de la DIAN." };
-  if (form.get("authorized") !== "on") return { status: "error", message: "Confirma que eres el titular de la cuenta o tienes su autorización." };
-
-  try {
-    // Registering the same account again renews it: the connection keeps its id.
-    const connection = await croma<Connection>("/co/dian-facturacion/connections/v1", {
-      access_link: accessLink,
-      authorized: true,
-    });
-    await setConnectionId(connection.id);
-  } catch (error) {
-    return { status: "error", message: describe(error) };
-  }
-  redirect("/panel");
+export async function connect(input: { access_link: string; authorized: boolean }) {
+  const form = connectForm.safeParse(input);
+  if (!form.success) return invalid(form.error);
+  // Registering the same account again renews it: the connection keeps its id.
+  const result = await croma("/co/dian-facturacion/connections/v1", form.data, connection);
+  if (result.ok) await setSession({ mode: "live", connectionId: result.data.id, openedAt: Date.now() });
+  return result;
 }
 
-export async function disconnect(): Promise<void> {
-  const id = await getConnectionId();
-  if (id && process.env.CROMA_API_KEY) {
-    await fetch(`https://api.croma.run/co/dian-facturacion/connections/v1/${id}`, {
+export async function startDemo() {
+  await setSession({ mode: "demo" });
+}
+
+export async function signOut() {
+  const session = await getSession();
+  await clearSession();
+  if (session?.mode === "live" && process.env.CROMA_API_KEY) {
+    await fetch(`${process.env.CROMA_API_URL ?? "https://api.croma.run"}/co/dian-facturacion/connections/v1/${session.connectionId}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${process.env.CROMA_API_KEY}` },
     }).catch(() => undefined);
   }
-  await clearConnectionId();
-  redirect("/");
 }
 
-function describe(error: unknown): string {
-  if (!(error instanceof CromaError)) return "Algo salió mal. Intenta de nuevo.";
-  switch (error.code) {
-    case "connection_rejected":
-      return "La DIAN ya no acepta ese enlace. Solicita uno nuevo: dura 60 minutos.";
-    case "missing_api_key":
-      return error.message;
-    case "invalid_param":
-    case "invalid_request":
-      return error.message;
-    case "upstream_unavailable":
-    case "timeout":
-      return "La DIAN no respondió a tiempo. Intenta de nuevo en un momento.";
-    default:
-      return error.message || "Algo salió mal. Intenta de nuevo.";
-  }
+// ─── Queries ────────────────────────────────────────────────────────────────
+
+export async function listDocuments(direction: "issued" | "received", input: RangeInput): Promise<Result<z.infer<typeof documentList>>> {
+  const range = rangeInput.safeParse(input);
+  if (!range.success) return invalid(range.error);
+  const session = await getSession();
+  if (!session) return noSession;
+  const path = `/co/dian-facturacion/${direction}-documents/v1`;
+  if (session.mode === "demo") return demo(path, { connection_id: "conn_demo", ...range.data }, demoList(direction, range.data.from_date, range.data.to_date));
+  return croma(path, { connection_id: session.connectionId, ...range.data }, documentList);
+}
+
+export async function getDocument(input: { cufe: string; issued_on: string }): Promise<Result<z.infer<typeof fullDocument>>> {
+  const ref = documentRef.safeParse(input);
+  if (!ref.success) return invalid(ref.error);
+  const session = await getSession();
+  if (!session) return noSession;
+  const path = "/co/dian-facturacion/document/v1";
+  if (session.mode === "demo") return demo(path, { connection_id: "conn_demo", ...ref.data }, demoDocument(ref.data.cufe, ref.data.issued_on));
+  return croma(path, { connection_id: session.connectionId, ...ref.data }, fullDocument);
+}
+
+export async function getMonthlyReport(input: { year: number; month: number }): Promise<Result<z.infer<typeof monthlyReport>>> {
+  const month = monthInput.safeParse(input);
+  if (!month.success) return invalid(month.error);
+  const session = await getSession();
+  if (!session) return noSession;
+  const path = "/co/dian-facturacion/monthly-reports/v1";
+  if (session.mode === "demo") return demo(path, { connection_id: "conn_demo", ...month.data }, demoMonthlyReport(month.data.year, month.data.month));
+  return croma(path, { connection_id: session.connectionId, ...month.data }, monthlyReport);
+}
+
+export async function getProfile(): Promise<Result<z.infer<typeof profile>>> {
+  const session = await getSession();
+  if (!session) return noSession;
+  const path = "/co/dian-facturacion/profile/v1";
+  if (session.mode === "demo") return demo(path, { connection_id: "conn_demo" }, demoProfile());
+  return croma(path, { connection_id: session.connectionId }, profile);
 }

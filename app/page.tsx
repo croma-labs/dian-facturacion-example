@@ -1,25 +1,17 @@
-import Link from "next/link";
+import { InspectorProvider } from "@/components/inspector";
+import { Landing } from "@/components/landing";
+import { SiteHeader } from "@/components/site-header";
+import { Workspace } from "@/components/workspace";
+import { getSession } from "@/lib/session";
 
-import { Onboarding } from "@/components/onboarding";
-import { getConnectionId } from "@/lib/session";
+export const maxDuration = 300;
 
-export default async function Home({ searchParams }: { searchParams: Promise<{ renovar?: string }> }) {
-  const { renovar } = await searchParams;
-  const connectionId = await getConnectionId();
-
+export default async function Home() {
+  const session = await getSession();
   return (
-    <>
-      {connectionId && !renovar ? (
-        <div className="mb-8 flex items-center justify-between rounded-lg border border-line bg-white px-4 py-3 text-sm">
-          <span>
-            Ya tienes una cuenta conectada <span className="font-mono text-xs text-muted">{connectionId}</span>
-          </span>
-          <Link href="/panel" className="font-medium underline underline-offset-4">
-            Ir al panel
-          </Link>
-        </div>
-      ) : null}
-      <Onboarding renewing={Boolean(renovar)} />
-    </>
+    <InspectorProvider>
+      <SiteHeader />
+      {session ? <Workspace session={session} /> : <Landing />}
+    </InspectorProvider>
   );
 }

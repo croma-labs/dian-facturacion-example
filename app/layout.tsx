@@ -1,40 +1,34 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Link from "next/link";
+
+import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "./globals.css";
 
-const sans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
-const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
+const geistSans = Geist({ variable: "--font-sans", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+
+const description = "Conecta una cuenta de facturación electrónica de la DIAN y explora sus facturas emitidas y recibidas, el XML y el PDF de cada una, el reporte mensual y el perfil, con la API de Croma.";
 
 export const metadata: Metadata = {
-  title: "Facturación DIAN con Croma",
-  description: "Ejemplo: conecta una cuenta de facturación electrónica de la DIAN y consulta sus facturas emitidas y recibidas con la API de Croma.",
+  title: "DIAN Playground · Croma",
+  description,
+  openGraph: { title: "DIAN Playground · Croma", description, siteName: "Croma" },
+  twitter: { card: "summary_large_image", title: "DIAN Playground · Croma", description },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`${sans.variable} ${mono.variable}`}>
-      <body className="min-h-screen font-sans antialiased">
-        <header className="border-b border-line bg-white">
-          <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-            <Link href="/" className="flex items-center gap-2 text-sm font-semibold">
-              <span className="inline-block size-5 rounded bg-ink" />
-              Facturación DIAN
-            </Link>
-            <a href="https://docs.croma.run/guides/colombia/dian-facturacion" className="text-sm text-muted hover:text-ink">
-              Documentación
-            </a>
-          </div>
-        </header>
-        <main className="mx-auto max-w-6xl px-4 py-10">{children}</main>
-        <footer className="mx-auto max-w-6xl px-4 pb-10 text-xs text-muted">
-          Ejemplo de código abierto construido con la API de{" "}
-          <a href="https://usecroma.com" className="underline">
-            Croma
-          </a>
-          .
-        </footer>
+    <html lang="es" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
+      <body className="flex min-h-full flex-col">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <TooltipProvider>
+            {children}
+            <Toaster position="bottom-left" />
+          </TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
