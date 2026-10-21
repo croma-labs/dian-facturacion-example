@@ -145,12 +145,3 @@
 @utility animate-grow {
   animation: grow 600ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }
-
-/* Faint ruled grid behind the hero, fading out toward the content. */
-@utility ruled-grid {
-  background-image:
-    linear-gradient(to right, var(--line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--line) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(ellipse at top, black 20%, transparent 70%);
-}

@@ -39,9 +39,8 @@ export function Landing() {
   return (
     <div className="mx-auto grid w-full max-w-[1400px] flex-1 border-x border-line xl:grid-cols-[1fr_380px]">
       <div className="min-w-0">
-        <section className="relative overflow-hidden border-b border-line">
-          <div aria-hidden className="ruled-grid absolute inset-0" />
-          <div className="relative px-6 pt-16 pb-14 sm:px-10 lg:pt-24">
+        <section className="border-b border-line">
+          <div className="px-6 pt-16 pb-14 sm:px-10 lg:pt-24">
             <p className="eyebrow flex items-center gap-2">
               <span className="size-1.5 bg-agent" /> DIAN · Facturación electrónica
             </p>
